@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  # ── Collects job IDs continuously ─────────────────────────────────────────
+  search:
+    build: .
+    command: python search_retriever.py
+    env_file: .env
+    environment:
+      - HEADLESS=true
+    restart: unless-stopped
+
+  # ── Fills in full job details continuously ─────────────────────────────────
+  details:
+    build: .
+    command: python details_retriever.py
+    env_file: .env
+    environment:
+      - HEADLESS=true
+    restart: unless-stopped
+    depends_on:
+      - search

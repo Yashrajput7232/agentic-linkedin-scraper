@@ -13,52 +13,102 @@ from scripts.helpers import strip_val, get_value_by_path
 
 load_dotenv()
 
-BROWSER = os.getenv("BROWSER", "edge")   # chrome | edge
+HEADLESS = os.getenv("HEADLESS", "false").strip().lower() == "true"
 
 
-# ---------------------------------------------------------------------------
-# LinkedIn login helpers
-# ---------------------------------------------------------------------------
-
-def create_session(email: str, password: str) -> requests.Session:
+def _build_driver():
     """
-    Open a browser, log in to LinkedIn, harvest session cookies, then close.
-    The user will be prompted to press ENTER after any MFA / CAPTCHA step.
+    Build a Selenium WebDriver based on BROWSER and HEADLESS env vars.
+
+    HEADLESS=true  → Chrome with headless flags (required for Docker / no display)
+    HEADLESS=false → visible Chrome or Edge window (default for local use)
     """
+    if HEADLESS:
+        # Headless Chrome — only Chrome is supported in Docker
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless=new")          # new headless mode (Chrome 112+)
+        options.add_argument("--no-sandbox")             # required in Docker
+        options.add_argument("--disable-dev-shm-usage")  # avoid /dev/shm size issues
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--remote-debugging-port=9222")
+        options.add_argument(
+            "--user-agent=Mozilla/5.0 (X11; Linux x86_64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/117.0.0.0 Safari/537.36"
+        )
+        return webdriver.Chrome(options=options)
+
+    # ── GUI mode (local machine) ─────────────────────────────────────────
     if BROWSER == "chrome":
-        driver = webdriver.Chrome()
+        return webdriver.Chrome()
     elif BROWSER == "edge":
-        driver = webdriver.Edge()
+        return webdriver.Edge()
     else:
         raise ValueError(f"Unsupported BROWSER value: {BROWSER!r}. Use 'chrome' or 'edge'.")
 
-    wait = WebDriverWait(driver, 15)
 
+def create_session(email: str, password: str) -> requests.Session:
+    """
+    Log in to LinkedIn and return an authenticated requests.Session.
+
+    GUI mode  (HEADLESS=false): opens a visible browser window so you can
+              handle CAPTCHA/2FA manually, then press ENTER in the terminal.
+    Headless  (HEADLESS=true):  runs Chrome with no display (Docker-safe).
+              Login success is detected automatically by waiting for the URL
+              to leave the login/checkpoint pages (up to 90 seconds).
+              ⚠ If LinkedIn shows a CAPTCHA in headless mode the session
+              will fail — run once in GUI mode first to warm the account.
+    """
+    driver = _build_driver()
+    wait   = WebDriverWait(driver, 15)
+
+    print(f"[Login] Signing in as {email} (headless={HEADLESS})...")
     driver.get("https://www.linkedin.com/checkpoint/rm/sign-in-another-account")
 
-    # Wait for and fill the email field
+    # Fill credentials
     wait.until(EC.presence_of_element_located((By.ID, "username"))).send_keys(email)
-
-    # Fill password
     driver.find_element(By.ID, "password").send_keys(password)
 
-    # Click the sign-in button — use a CSS selector that survives DOM restructuring.
-    # Tries the submit button directly; falls back to any visible button with sign-in text.
+    # Click Sign In
     try:
         sign_in_btn = wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']"))
         )
     except Exception:
-        # Last-resort: any button whose text contains 'Sign in'
         sign_in_btn = wait.until(
             EC.element_to_be_clickable(
-                (By.XPATH, "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'sign in')]"
+                (By.XPATH,
+                 "//button[contains(translate(text(),"
+                 "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'sign in')]")
             )
-        ))
+        )
     sign_in_btn.click()
 
-    # Give the user time to handle any CAPTCHA / 2FA before we grab cookies
-    input(f'Press ENTER after a successful login for "{email}": ')
+    if HEADLESS:
+        # Auto-detect successful login: wait until URL leaves login/checkpoint pages
+        try:
+            WebDriverWait(driver, 90).until(
+                lambda d: (
+                    "linkedin.com/login" not in d.current_url
+                    and "checkpoint" not in d.current_url
+                    and "signup" not in d.current_url
+                )
+            )
+            print(f"[Login] ✓ Logged in as {email}")
+        except Exception:
+            driver.save_screenshot("/tmp/linkedin_login_failed.png")
+            driver.quit()
+            raise RuntimeError(
+                f"Headless login timed out for {email}. "
+                "LinkedIn may have shown a CAPTCHA. "
+                "Screenshot saved to /tmp/linkedin_login_failed.png. "
+                "Try running once in GUI mode (HEADLESS=false) to warm the account."
+            )
+    else:
+        # GUI mode: let the user handle CAPTCHA / 2FA manually
+        input(f'Press ENTER after a successful login for "{email}": ')
 
     driver.get("https://www.linkedin.com/jobs/search/?")
     time.sleep(2)
