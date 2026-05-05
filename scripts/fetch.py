@@ -13,7 +13,51 @@ from scripts.helpers import strip_val, get_value_by_path
 
 load_dotenv()
 
-HEADLESS = os.getenv("HEADLESS", "false").strip().lower() == "true"
+HEADLESS    = os.getenv("HEADLESS",    "false").strip().lower() == "true"
+BROWSER     = os.getenv("BROWSER",     "edge")
+COOKIE_FILE = os.getenv("COOKIE_FILE", "linkedin_cookies.json")
+
+
+# ---------------------------------------------------------------------------
+# Cookie-file helpers (used when HEADLESS=true / Docker)
+# ---------------------------------------------------------------------------
+
+def _load_session_from_file(email: str) -> requests.Session | None:
+    """
+    Try to build a session from linkedin_cookies.json.
+    Returns a Session if cookies are still valid, None otherwise.
+    """
+    import json
+    if not os.path.exists(COOKIE_FILE):
+        return None
+    try:
+        with open(COOKIE_FILE) as f:
+            all_cookies = json.load(f)
+    except Exception:
+        return None
+
+    if email not in all_cookies:
+        print(f"[Session] No saved cookies found for {email} in {COOKIE_FILE}")
+        return None
+
+    session = requests.Session()
+    for name, value in all_cookies[email].items():
+        session.cookies.set(name, value)
+
+    # Quick validity check
+    try:
+        resp = session.get(
+            "https://www.linkedin.com/feed/",
+            allow_redirects=False,
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            print(f"[Session] ✓ Valid saved cookies loaded for {email}")
+            return session
+        print(f"[Session] Saved cookies for {email} are expired (status={resp.status_code})")
+    except Exception as e:
+        print(f"[Session] Cookie check failed: {e}")
+    return None
 
 
 def _build_driver():
@@ -51,27 +95,36 @@ def _build_driver():
 
 def create_session(email: str, password: str) -> requests.Session:
     """
-    Log in to LinkedIn and return an authenticated requests.Session.
+    Return an authenticated LinkedIn requests.Session.
 
-    GUI mode  (HEADLESS=false): opens a visible browser window so you can
-              handle CAPTCHA/2FA manually, then press ENTER in the terminal.
-    Headless  (HEADLESS=true):  runs Chrome with no display (Docker-safe).
-              Login success is detected automatically by waiting for the URL
-              to leave the login/checkpoint pages (up to 90 seconds).
-              ⚠ If LinkedIn shows a CAPTCHA in headless mode the session
-              will fail — run once in GUI mode first to warm the account.
+    Priority:
+      1. Load from COOKIE_FILE (linkedin_cookies.json) — no browser needed.
+         Run save_session.py locally once to generate this file.
+      2. Headless browser login (HEADLESS=true) — auto-detects success via URL.
+      3. GUI browser login (HEADLESS=false) — prompts user to press ENTER.
     """
+    # ── 1. Try saved cookies first (fastest, works in Docker) ────────────────
+    session = _load_session_from_file(email)
+    if session:
+        return session
+
+    if HEADLESS:
+        raise RuntimeError(
+            f"No valid saved cookies found for {email} and HEADLESS=true.\n"
+            f"Run locally first:\n"
+            f"  HEADLESS=false python save_session.py\n"
+            f"Then copy linkedin_cookies.json into Docker (see docker-compose.yml volumes)."
+        )
+
+    # ── 2. GUI browser login ─────────────────────────────────────────────────
+    print(f"[Login] Opening browser for {email}...")
     driver = _build_driver()
     wait   = WebDriverWait(driver, 15)
 
-    print(f"[Login] Signing in as {email} (headless={HEADLESS})...")
     driver.get("https://www.linkedin.com/checkpoint/rm/sign-in-another-account")
-
-    # Fill credentials
     wait.until(EC.presence_of_element_located((By.ID, "username"))).send_keys(email)
     driver.find_element(By.ID, "password").send_keys(password)
 
-    # Click Sign In
     try:
         sign_in_btn = wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']"))
@@ -86,37 +139,15 @@ def create_session(email: str, password: str) -> requests.Session:
         )
     sign_in_btn.click()
 
-    if HEADLESS:
-        # Auto-detect successful login: wait until URL leaves login/checkpoint pages
-        try:
-            WebDriverWait(driver, 90).until(
-                lambda d: (
-                    "linkedin.com/login" not in d.current_url
-                    and "checkpoint" not in d.current_url
-                    and "signup" not in d.current_url
-                )
-            )
-            print(f"[Login] ✓ Logged in as {email}")
-        except Exception:
-            driver.save_screenshot("/tmp/linkedin_login_failed.png")
-            driver.quit()
-            raise RuntimeError(
-                f"Headless login timed out for {email}. "
-                "LinkedIn may have shown a CAPTCHA. "
-                "Screenshot saved to /tmp/linkedin_login_failed.png. "
-                "Try running once in GUI mode (HEADLESS=false) to warm the account."
-            )
-    else:
-        # GUI mode: let the user handle CAPTCHA / 2FA manually
-        input(f'Press ENTER after a successful login for "{email}": ')
+    input(f'Press ENTER after a successful login for "{email}": ')
 
     driver.get("https://www.linkedin.com/jobs/search/?")
     time.sleep(2)
-    cookies = driver.get_cookies()
+    raw_cookies = driver.get_cookies()
     driver.quit()
 
     session = requests.Session()
-    for cookie in cookies:
+    for cookie in raw_cookies:
         session.cookies.set(cookie["name"], cookie["value"])
     return session
 

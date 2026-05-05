@@ -13,6 +13,8 @@ __pycache__/
 
 # Runtime output files
 matched_jobs.json
+linkedin_cookies.json
+
 
 # Ignore backups and other versions of the db
 # E.g. linkedin_jobs.db.bak, linkedin_jobs_uk.db
