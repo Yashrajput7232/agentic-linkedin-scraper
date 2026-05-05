@@ -1,33 +1,34 @@
-from scripts.create_db import create_tables
-from scripts.database_scripts import insert_data
+from scripts.mongodb import setup_collections, get_db
+from scripts.mongodb_scripts import insert_data_mongo
 from scripts.fetch import JobDetailRetriever
-import sqlite3
 from scripts.helpers import clean_job_postings
 import time
 import random
 
-SLEEP_TIME = 60
+SLEEP_TIME  = 60
 MAX_UPDATES = 25
 
-conn = sqlite3.connect('linkedin_jobs.db')
-cursor = conn.cursor()
+# ── Setup MongoDB collections / indexes ──────────────────────────────────────
+db = get_db()
+setup_collections(db)
 
-create_tables(conn, cursor)
-
-
+# ── Start scraper loop ────────────────────────────────────────────────────────
 job_detail_retriever = JobDetailRetriever()
 
 while True:
-    query = "SELECT job_id FROM jobs WHERE scraped = 0"
-    cursor.execute(query)
-    result = cursor.fetchall()
-    result = [r[0] for r in result]
+    # Find all jobs that haven't been fully scraped yet (scraped == 0)
+    pending = [
+        doc["job_id"]
+        for doc in db["jobs"].find({"scraped": 0}, {"job_id": 1, "_id": 0})
+    ]
 
-    details = job_detail_retriever.get_job_details(random.sample(result, min(MAX_UPDATES, len(result))))
+    sample = random.sample(pending, min(MAX_UPDATES, len(pending)))
+
+    details = job_detail_retriever.get_job_details(sample)
     details = clean_job_postings(details)
-    insert_data(details, conn, cursor)
-    print('UPDATED {} VALUES IN DB'.format(len(details)))
+    insert_data_mongo(details)
 
-    print('Sleeping For {} Seconds...'.format(SLEEP_TIME))
+    print(f"UPDATED {len(details)} VALUES IN DB")
+    print(f"Sleeping For {SLEEP_TIME} Seconds...")
     time.sleep(SLEEP_TIME)
-    print('Resuming...')
+    print("Resuming...")
