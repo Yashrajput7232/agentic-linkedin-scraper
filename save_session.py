@@ -17,23 +17,60 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.edge.service import Service as EdgeService
 import time
 from dotenv import load_dotenv
 
 load_dotenv()
 
 COOKIE_FILE = os.getenv("COOKIE_FILE", "linkedin_cookies.json")
-BROWSER     = os.getenv("BROWSER", "chrome")
+
+
+def _normalize_browser(value: str, default: str = "chrome") -> str:
+    if not value:
+        return default
+    value = value.strip()
+    normalized = value.lower()
+    if normalized in {"chrome", "chromium", "google-chrome", "google chrome", "googlechrome"}:
+        return "chrome"
+    if normalized in {"edge", "msedge", "microsoft-edge", "microsoft edge", "microsoftedge"}:
+        return "edge"
+    if os.path.sep in value or value.startswith("."):
+        if "chrome" in normalized or "chromium" in normalized or "google" in normalized:
+            return "chrome"
+        if "edge" in normalized or "msedge" in normalized or "microsoft" in normalized:
+            return "edge"
+        return default
+    return value
+
+
+BROWSER     = _normalize_browser(os.getenv("BROWSER", "chrome"))
 
 
 def gui_login(email: str, password: str) -> requests.Session:
     """Open a visible browser, log in, return session with cookies."""
+    # Try pre-installed ChromeDriver first (Docker), fallback to webdriver-manager (local)
+    driver = None
+    
     if BROWSER == "chrome":
-        driver = webdriver.Chrome()
+        try:
+            # Try Docker's pre-installed ChromeDriver first
+            service = ChromeService("/usr/local/bin/chromedriver")
+            driver = webdriver.Chrome(service=service)
+        except (FileNotFoundError, Exception):
+            # Fallback: use webdriver-manager for local machine
+            service = ChromeService(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service)
     elif BROWSER == "edge":
-        driver = webdriver.Edge()
+        service = EdgeService(EdgeChromiumDriverManager().install())
+        driver = webdriver.Edge(service=service)
     else:
-        raise ValueError(f"Unsupported BROWSER: {BROWSER!r}")
+        raise ValueError(
+            f"Unsupported BROWSER: {BROWSER!r}. Use 'chrome' or 'edge', or leave BROWSER unset."
+        )
 
     wait = WebDriverWait(driver, 15)
     driver.get("https://www.linkedin.com/checkpoint/rm/sign-in-another-account")
@@ -67,6 +104,18 @@ def gui_login(email: str, password: str) -> requests.Session:
     return session, cookie_dict
 
 
+def _load_cookie_file() -> dict:
+    if os.path.isdir(COOKIE_FILE):
+        raise IsADirectoryError(
+            f"COOKIE_FILE path is a directory, but a JSON file is required: {COOKIE_FILE!r}."
+            " Remove the directory or set COOKIE_FILE to a file path."
+        )
+    if not os.path.exists(COOKIE_FILE):
+        return {}
+    with open(COOKIE_FILE) as f:
+        return json.load(f)
+
+
 def main():
     emails    = [e.strip() for e in os.environ.get("LINKEDIN_SEARCH_EMAIL",  "").split(",") if e.strip()]
     passwords = [p.strip() for p in os.environ.get("LINKEDIN_SEARCH_PASSWORD", "").split(",") if p.strip()]
@@ -81,10 +130,7 @@ def main():
             seen.add(e)
             unique_pairs.append((e, p))
 
-    all_cookies = {}
-    if os.path.exists(COOKIE_FILE):
-        with open(COOKIE_FILE) as f:
-            all_cookies = json.load(f)
+    all_cookies = _load_cookie_file()
 
     for email, password in unique_pairs:
         print(f"\n── Logging in as {email} ──")

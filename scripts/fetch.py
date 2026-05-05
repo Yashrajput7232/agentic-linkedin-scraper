@@ -4,6 +4,10 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.edge.service import Service as EdgeService
 import time
 import requests
 import pandas as pd
@@ -14,7 +18,27 @@ from scripts.helpers import strip_val, get_value_by_path
 load_dotenv()
 
 HEADLESS    = os.getenv("HEADLESS",    "false").strip().lower() == "true"
-BROWSER     = os.getenv("BROWSER",     "edge")
+
+
+def _normalize_browser(value: str, default: str = "edge") -> str:
+    if not value:
+        return default
+    value = value.strip()
+    normalized = value.lower()
+    if normalized in {"chrome", "chromium", "google-chrome", "google chrome", "googlechrome"}:
+        return "chrome"
+    if normalized in {"edge", "msedge", "microsoft-edge", "microsoft edge", "microsoftedge"}:
+        return "edge"
+    if os.path.sep in value or value.startswith("."):
+        if "chrome" in normalized or "chromium" in normalized or "google" in normalized:
+            return "chrome"
+        if "edge" in normalized or "msedge" in normalized or "microsoft" in normalized:
+            return "edge"
+        return default
+    return value
+
+
+BROWSER     = _normalize_browser(os.getenv("BROWSER", "edge"))
 COOKIE_FILE = os.getenv("COOKIE_FILE", "linkedin_cookies.json")
 
 
@@ -29,6 +53,9 @@ def _load_session_from_file(email: str) -> requests.Session | None:
     """
     import json
     if not os.path.exists(COOKIE_FILE):
+        return None
+    if os.path.isdir(COOKIE_FILE):
+        print(f"[Session] COOKIE_FILE path is a directory, expected JSON file: {COOKIE_FILE}")
         return None
     try:
         with open(COOKIE_FILE) as f:
@@ -82,15 +109,20 @@ def _build_driver():
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/117.0.0.0 Safari/537.36"
         )
-        return webdriver.Chrome(options=options)
+        service = ChromeService(ChromeDriverManager().install())
+        return webdriver.Chrome(service=service, options=options)
 
     # ── GUI mode (local machine) ─────────────────────────────────────────
     if BROWSER == "chrome":
-        return webdriver.Chrome()
+        service = ChromeService(ChromeDriverManager().install())
+        return webdriver.Chrome(service=service)
     elif BROWSER == "edge":
-        return webdriver.Edge()
+        service = EdgeService(EdgeChromiumDriverManager().install())
+        return webdriver.Edge(service=service)
     else:
-        raise ValueError(f"Unsupported BROWSER value: {BROWSER!r}. Use 'chrome' or 'edge'.")
+        raise ValueError(
+            f"Unsupported BROWSER value: {BROWSER!r}. Use 'chrome' or 'edge', or leave BROWSER unset."
+        )
 
 
 def create_session(email: str, password: str) -> requests.Session:
