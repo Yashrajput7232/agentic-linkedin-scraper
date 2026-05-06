@@ -1,0 +1,657 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   LinkedIn Job Scraper Dashboard - Styles
+   ───────────────────────────────────────────────────────────────────────────── */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary: #0A66C2;
+    --primary-dark: #004182;
+    --success: #31A24C;
+    --danger: #DC3545;
+    --warning: #FF9800;
+    --info: #17A2B8;
+    --light: #F3F6F8;
+    --gray: #555;
+    --gray-light: #E8EAED;
+    --text: #333;
+    --border: #DDD;
+    --radius: 8px;
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+    color: var(--text);
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    background: white;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ─── Header ──────────────────────────────────────────────────────────────── */
+.header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: 2.5rem 2rem;
+    text-align: center;
+    box-shadow: var(--shadow);
+}
+
+.header-content h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.header-content p {
+    font-size: 1.1rem;
+    opacity: 0.95;
+}
+
+/* ─── Navigation ──────────────────────────────────────────────────────────── */
+.nav-tabs {
+    display: flex;
+    background: white;
+    border-bottom: 2px solid var(--gray-light);
+    padding: 0 2rem;
+}
+
+.tab-button {
+    padding: 1rem 1.5rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--gray);
+    font-size: 1rem;
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.tab-button:hover {
+    color: var(--primary);
+    background: var(--light);
+}
+
+.tab-button.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+/* ─── Main Content ────────────────────────────────────────────────────────── */
+.main-content {
+    flex: 1;
+    padding: 2rem;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ─── Jobs Grid ───────────────────────────────────────────────────────────── */
+.jobs-header {
+    margin-bottom: 2rem;
+}
+
+.jobs-header h2 {
+    margin-bottom: 1rem;
+}
+
+.search-filters {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.search-box,
+.filter-select {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+}
+
+.search-box {
+    flex: 1;
+    min-width: 200px;
+}
+
+.filter-select {
+    min-width: 150px;
+}
+
+.jobs-grid,
+.bookmarks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+
+.job-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.job-card:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(-4px);
+    border-color: var(--primary);
+}
+
+.job-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 1rem;
+}
+
+.job-card-title {
+    flex: 1;
+    margin: 0;
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+.job-card-company {
+    color: var(--gray);
+    font-size: 0.9rem;
+    margin: 0.5rem 0;
+}
+
+.job-card-location {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--gray);
+    font-size: 0.9rem;
+}
+
+.relevance-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, var(--success) 0%, #20B832 100%);
+    color: white;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.relevance-badge.high {
+    background: linear-gradient(135deg, var(--success) 0%, #20B832 100%);
+}
+
+.relevance-badge.medium {
+    background: linear-gradient(135deg, var(--warning) 0%, #FFA500 100%);
+}
+
+.relevance-badge.low {
+    background: linear-gradient(135deg, #999 0%, #666 100%);
+}
+
+.job-card-details {
+    margin: 1rem 0;
+    padding: 1rem 0;
+    border-top: 1px solid var(--gray-light);
+    border-bottom: 1px solid var(--gray-light);
+}
+
+.job-card-detail {
+    display: flex;
+    justify-content: space-between;
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+}
+
+.job-card-detail-label {
+    font-weight: 600;
+    color: var(--gray);
+}
+
+.job-card-detail-value {
+    color: var(--text);
+}
+
+.job-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.job-card-actions button {
+    flex: 1;
+}
+
+.bookmark-btn {
+    background: none;
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.bookmark-btn:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.bookmark-btn.bookmarked {
+    background: var(--primary);
+    color: white;
+}
+
+/* ─── Buttons ─────────────────────────────────────────────────────────────── */
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(10, 102, 194, 0.3);
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-secondary {
+    background: var(--light);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+    background: var(--gray-light);
+}
+
+.btn-success {
+    background: var(--success);
+    color: white;
+}
+
+.btn-success:hover {
+    background: #27912a;
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #bd2d3b;
+}
+
+.btn-danger:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-group {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* ─── Resume Management ───────────────────────────────────────────────────── */
+.resume-container,
+.scraper-container {
+    max-width: 800px;
+}
+
+.upload-section,
+.scraper-status,
+.scraper-controls,
+.scraper-logs {
+    background: var(--light);
+    padding: 2rem;
+    border-radius: var(--radius);
+    margin: 1.5rem 0;
+}
+
+.upload-area {
+    border: 2px dashed var(--primary);
+    border-radius: var(--radius);
+    padding: 2rem;
+    text-align: center;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.upload-area:hover {
+    border-color: var(--primary-dark);
+    background: #f8f9fa;
+}
+
+.upload-area p {
+    margin: 0.5rem 0;
+}
+
+.upload-area .text-sm {
+    font-size: 0.85rem;
+    color: var(--gray);
+}
+
+.skills-section {
+    margin: 1.5rem 0;
+}
+
+.skills-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.skill-tag {
+    background: var(--primary);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.stat-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: var(--radius);
+    text-align: center;
+    border-left: 4px solid var(--primary);
+}
+
+.stat-card h4 {
+    color: var(--gray);
+    margin-bottom: 0.5rem;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.resume-info,
+.analysis-results {
+    background: var(--light);
+    padding: 2rem;
+    border-radius: var(--radius);
+    margin: 1.5rem 0;
+}
+
+.resume-info.hidden,
+.analysis-results.hidden {
+    display: none;
+}
+
+.actions {
+    margin-top: 1.5rem;
+}
+
+/* ─── Scraper Controls ────────────────────────────────────────────────────── */
+.status-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: var(--radius);
+    border-left: 4px solid var(--info);
+}
+
+.status-card p {
+    margin: 0.5rem 0;
+}
+
+.control-options {
+    margin: 1rem 0;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.logs-list {
+    background: white;
+    border-radius: var(--radius);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.log-item {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+}
+
+.log-item:last-child {
+    border-bottom: none;
+}
+
+.log-time {
+    color: var(--gray);
+    font-size: 0.85rem;
+}
+
+.log-type {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: var(--primary);
+    color: white;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-right: 0.5rem;
+}
+
+/* ─── Modal ───────────────────────────────────────────────────────────────── */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-content {
+    background: white;
+    border-radius: var(--radius);
+    padding: 2rem;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 2rem;
+    cursor: pointer;
+    color: var(--gray);
+    transition: color 0.3s ease;
+}
+
+.modal-close:hover {
+    color: var(--text);
+}
+
+/* ─── Empty State ─────────────────────────────────────────────────────────── */
+.empty-state {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--gray);
+    background: var(--light);
+    border-radius: var(--radius);
+}
+
+.empty-state p {
+    font-size: 1.1rem;
+    margin: 1rem 0;
+}
+
+/* ─── Loading ─────────────────────────────────────────────────────────────── */
+.loading {
+    text-align: center;
+    padding: 2rem;
+    color: var(--gray);
+    font-size: 1.1rem;
+}
+
+.spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--primary);
+    border-radius: 50%;
+    border-top: 3px solid transparent;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* ─── Footer ──────────────────────────────────────────────────────────────── */
+.footer {
+    background: var(--light);
+    padding: 2rem;
+    text-align: center;
+    color: var(--gray);
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+}
+
+/* ─── Utilities ───────────────────────────────────────────────────────────── */
+.text-sm {
+    font-size: 0.85rem;
+}
+
+.text-gray {
+    color: var(--gray);
+}
+
+/* ─── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .header-content h1 {
+        font-size: 1.8rem;
+    }
+
+    .nav-tabs {
+        padding: 0;
+        overflow-x: auto;
+    }
+
+    .tab-button {
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .main-content {
+        padding: 1rem;
+    }
+
+    .search-filters {
+        flex-direction: column;
+    }
+
+    .search-box,
+    .filter-select {
+        width: 100%;
+    }
+
+    .jobs-grid,
+    .bookmarks-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .job-card {
+        padding: 1rem;
+    }
+
+    .button-group {
+        flex-direction: column;
+    }
+
+    .btn {
+        width: 100%;
+    }
+}

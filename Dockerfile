@@ -49,6 +49,22 @@ RUN CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+') && \
     chmod +x /usr/local/bin/chromedriver && \
     rm -rf /tmp/chromedriver*
 
+# ── Custom file for startup ──────────────────────────────────────────────────
+WORKDIR /app
+
+# ── Copy requirements and install dependencies ────────────────────────────────
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ── Copy application code ────────────────────────────────────────────────────
+COPY . .
+
+# ── Expose API port ──────────────────────────────────────────────────────────
+EXPOSE 8000
+
+# ── Default command can be overridden in docker-compose ─────────────────────
+CMD ["python", "search_retriever.py"]
+
 # ── App setup ────────────────────────────────────────────────────────────────
 WORKDIR /app
 COPY requirements.txt .

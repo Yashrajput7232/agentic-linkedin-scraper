@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Job Scraper - Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>💼 LinkedIn Job Scraper</h1>
+                <p>Find and apply to jobs matched with your resume</p>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs">
+            <button class="tab-button active" data-tab="jobs">Jobs</button>
+            <button class="tab-button" data-tab="resume">Resume</button>
+            <button class="tab-button" data-tab="bookmarks">Bookmarks</button>
+            <button class="tab-button" data-tab="scraper">Scraper</button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <!-- Jobs Tab -->
+            <section id="jobs-tab" class="tab-content active">
+                <div class="jobs-header">
+                    <h2>Available Jobs</h2>
+                    <div class="search-filters">
+                        <input 
+                            type="text" 
+                            id="search-input" 
+                            class="search-box" 
+                            placeholder="Search by title or description..."
+                        >
+                        <select id="location-filter" class="filter-select">
+                            <option value="">All Locations</option>
+                            <option value="Remote">Remote</option>
+                            <option value="New York">New York</option>
+                            <option value="San Francisco">San Francisco</option>
+                            <option value="London">London</option>
+                        </select>
+                        <select id="work-type-filter" class="filter-select">
+                            <option value="">All Work Types</option>
+                            <option value="Full-time">Full-time</option>
+                            <option value="Part-time">Part-time</option>
+                            <option value="Contract">Contract</option>
+                        </select>
+                        <button id="apply-filters" class="btn btn-primary">Apply Filters</button>
+                        <button id="clear-filters" class="btn btn-secondary">Clear</button>
+                    </div>
+                </div>
+
+                <div id="jobs-container" class="jobs-grid"></div>
+                <div id="jobs-loading" class="loading">Loading jobs...</div>
+            </section>
+
+            <!-- Resume Tab -->
+            <section id="resume-tab" class="tab-content">
+                <div class="resume-container">
+                    <h2>Resume Management</h2>
+                    
+                    <div class="upload-section">
+                        <h3>Upload Your Resume</h3>
+                        <div class="upload-area" id="upload-area">
+                            <input 
+                                type="file" 
+                                id="resume-file" 
+                                accept=".txt,.pdf,.docx"
+                                hidden
+                            >
+                            <p>📄 Click to upload or drag & drop</p>
+                            <p class="text-sm">Supported: TXT, PDF, DOCX</p>
+                        </div>
+                        <button id="upload-resume" class="btn btn-primary">Upload Resume</button>
+                    </div>
+
+                    <div id="resume-info" class="resume-info hidden">
+                        <h3>Current Resume</h3>
+                        <p><strong>File:</strong> <span id="resume-filename"></span></p>
+                        <p><strong>Uploaded:</strong> <span id="resume-date"></span></p>
+                        
+                        <div class="skills-section">
+                            <h4>Extracted Skills</h4>
+                            <div id="skills-list" class="skills-tags"></div>
+                        </div>
+
+                        <div class="actions">
+                            <button id="analyze-resume" class="btn btn-primary">
+                                Analyze & Calculate Relevance Scores
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="analysis-results" class="analysis-results hidden">
+                        <h3>Analysis Results</h3>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <h4>Jobs Analyzed</h4>
+                                <p id="jobs-analyzed" class="stat-number">0</p>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Avg. Match Score</h4>
+                                <p id="avg-score" class="stat-number">0%</p>
+                            </div>
+                            <div class="stat-card">
+                                <h4>High Matches (70%+)</h4>
+                                <p id="high-matches" class="stat-number">0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bookmarks Tab -->
+            <section id="bookmarks-tab" class="tab-content">
+                <div class="bookmarks-header">
+                    <h2>Saved Jobs</h2>
+                </div>
+                <div id="bookmarks-container" class="bookmarks-grid"></div>
+                <div id="no-bookmarks" class="empty-state">
+                    <p>📌 No saved jobs yet. Bookmark jobs you're interested in!</p>
+                </div>
+            </section>
+
+            <!-- Scraper Tab -->
+            <section id="scraper-tab" class="tab-content">
+                <div class="scraper-container">
+                    <h2>Scraper Control</h2>
+                    
+                    <div class="scraper-status">
+                        <h3>Status</h3>
+                        <div class="status-card">
+                            <p><strong>Status:</strong> <span id="scraper-status">Idle</span></p>
+                            <p><strong>Total Jobs:</strong> <span id="total-jobs">0</span></p>
+                            <p><strong>Jobs with Details:</strong> <span id="jobs-detailed">0</span></p>
+                            <p><strong>Pending:</strong> <span id="pending-jobs">0</span></p>
+                        </div>
+                    </div>
+
+                    <div class="scraper-controls">
+                        <h3>Controls</h3>
+                        <div class="control-options">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="fetch-details" checked>
+                                Fetch full job details (slower but more comprehensive)
+                            </label>
+                        </div>
+                        <div class="button-group">
+                            <button id="start-scraper" class="btn btn-success">
+                                ▶ Start Scraper
+                            </button>
+                            <button id="stop-scraper" class="btn btn-danger" disabled>
+                                ⏹ Stop Scraper
+                            </button>
+                            <button id="refresh-status" class="btn btn-secondary">
+                                🔄 Refresh Status
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="scraper-logs">
+                        <h3>Recent Logs</h3>
+                        <div id="logs-container" class="logs-list"></div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>LinkedIn Job Scraper v1.0 | Made with ❤️</p>
+        </footer>
+    </div>
+
+    <!-- Modal for Job Details -->
+    <div id="job-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
