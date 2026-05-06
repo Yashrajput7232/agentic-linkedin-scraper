@@ -44,12 +44,13 @@ function switchTab(tabName) {
     // Load data for specific tabs
     if (tabName === 'jobs') {
         loadJobs();
-    } else if (tabName === 'resume') {
-        loadResumeInfo();
     } else if (tabName === 'bookmarks') {
         loadBookmarks();
     } else if (tabName === 'scraper') {
         loadScraperStatus();
+    } else if (tabName === 'resume') {
+        loadResumeInfo();
+        loadAllResumes();
     }
 }
 
@@ -102,7 +103,7 @@ function renderJobCard(job) {
         <div class="job-card-header">
             <div>
                 <h3 class="job-card-title">${escapeHtml(job.title)}</h3>
-                <p class="job-card-company">${escapeHtml(job.company_id || 'Unknown Company')}</p>
+                <p class="job-card-company">${escapeHtml(job.company_name || job.company_id || 'Unknown Company')}</p>
                 <div class="job-card-location">📍 ${escapeHtml(job.location || 'Location not specified')}</div>
             </div>
             <div>
@@ -142,7 +143,7 @@ async function showJobDetails(jobId) {
         modalBody.innerHTML = `
             <div>
                 <h2>${escapeHtml(job.title)}</h2>
-                <p class="text-gray">${escapeHtml(job.company_id || 'Unknown Company')} • ${escapeHtml(job.location)}</p>
+                <p class="text-gray">${escapeHtml(job.company_name || job.company_id || 'Unknown Company')} • ${escapeHtml(job.location)}</p>
                 
                 ${job.relevance_score !== null ? `<div style="margin: 1rem 0"><span class="relevance-badge">${job.relevance_score.toFixed(0)}%</span></div>` : ''}
                 
@@ -211,6 +212,105 @@ document.getElementById('clear-filters').addEventListener('click', () => {
     loadJobs();
 });
 
+document.getElementById('load-relevant-jobs').addEventListener('click', () => {
+    openResumeSelectionModal();
+});
+
+async function openResumeSelectionModal() {
+    const modal = document.getElementById('resume-modal');
+    const listContainer = document.getElementById('resume-list');
+    modal.classList.remove('hidden');
+    
+    try {
+        const response = await fetch(`${API_BASE}/resume/all`);
+        const resumes = await response.json();
+        
+        if (resumes.length === 0) {
+            listContainer.innerHTML = '<p class="text-gray">No resumes found. Please upload one first.</p>';
+            return;
+        }
+        
+        listContainer.innerHTML = resumes.map(r => `
+            <div class="resume-card" style="border: 1px solid var(--border); padding: 1rem; margin-bottom: 0.5rem; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong>${escapeHtml(r.filename)}</strong><br/>
+                    <span class="text-sm text-gray">${new Date(r.uploaded_at).toLocaleString()}</span>
+                </div>
+                <button class="btn btn-primary" onclick="loadRelevantJobs('${r.resume_id}')">Select</button>
+            </div>
+        `).join('');
+    } catch (err) {
+        listContainer.innerHTML = `<p class="text-gray">Failed to load resumes: ${err.message}</p>`;
+    }
+}
+
+document.getElementById('resume-modal-close').addEventListener('click', () => {
+    document.getElementById('resume-modal').classList.add('hidden');
+});
+
+async function loadRelevantJobs(resume_id) {
+    document.getElementById('resume-modal').classList.add('hidden');
+    
+    const container = document.getElementById('jobs-container');
+    const loading = document.getElementById('jobs-loading');
+    
+    try {
+        loading.style.display = 'block';
+        container.innerHTML = '';
+
+        const params = new URLSearchParams({
+            resume_id: resume_id,
+            skip: 0,
+            limit: 50
+        });
+
+        const response = await fetch(`${API_BASE}/jobs/relevant?${params}`);
+        if (!response.ok) {
+            if (response.status === 404) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p>No relevance scores found for this resume yet.</p>
+                        <button class="btn btn-primary" onclick="analyzeAndLoad('${resume_id}')">Analyze Now</button>
+                    </div>
+                `;
+                return;
+            }
+            const errData = await response.json().catch(() => null);
+            throw new Error(errData?.detail || 'Failed to load relevant jobs');
+        }
+        
+        const jobs = await response.json();
+        state.jobs = jobs;
+
+        if (jobs.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>📭 No relevant jobs found.</p></div>';
+            return;
+        }
+
+        jobs.forEach(job => renderJobCard(job));
+    } catch (error) {
+        console.error('Error loading relevant jobs:', error);
+        container.innerHTML = `<div class="empty-state"><p>❌ Error loading relevant jobs: ${error.message}</p></div>`;
+    } finally {
+        loading.style.display = 'none';
+    }
+}
+
+async function analyzeAndLoad(resume_id) {
+    const container = document.getElementById('jobs-container');
+    container.innerHTML = '<div class="loading">Analyzing resume against all jobs... This may take a few seconds.</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/resume/analyze-relevance?resume_id=${resume_id}`, { method: 'POST' });
+        if (!response.ok) throw new Error('Analysis failed');
+        
+        // After successful analysis, load the relevant jobs!
+        await loadRelevantJobs(resume_id);
+    } catch (err) {
+        container.innerHTML = `<div class="empty-state"><p>❌ Error analyzing resume: ${err.message}</p></div>`;
+    }
+}
+
 // ─── Resume Management ──────────────────────────────────────────────────────
 const uploadArea = document.getElementById('upload-area');
 const resumeFile = document.getElementById('resume-file');
@@ -276,13 +376,42 @@ async function loadResumeInfo() {
         document.getElementById('resume-date').textContent = new Date(resume.uploaded_at).toLocaleDateString();
 
         const skillsList = document.getElementById('skills-list');
-        skillsList.innerHTML = resume.extracted_skills
-            .map(skill => `<span class="skill-tag">${escapeHtml(skill)}</span>`)
-            .join('');
+        if (resume.extracted_skills && resume.extracted_skills.length > 0) {
+            skillsList.innerHTML = resume.extracted_skills
+                .map(skill => `<span class="skill-tag">${escapeHtml(skill)}</span>`)
+                .join('');
+        } else {
+            skillsList.innerHTML = '<span class="text-gray">No specific skills extracted</span>';
+        }
 
         document.getElementById('resume-info').classList.remove('hidden');
     } catch (error) {
         document.getElementById('resume-info').classList.add('hidden');
+    }
+}
+
+async function loadAllResumes() {
+    const listContainer = document.getElementById('past-resumes-list');
+    try {
+        const response = await fetch(`${API_BASE}/resume/all`);
+        if (!response.ok) throw new Error('Failed to load past resumes');
+        const resumes = await response.json();
+        
+        if (resumes.length === 0) {
+            listContainer.innerHTML = '<p class="text-gray">No past resumes found.</p>';
+            return;
+        }
+        
+        listContainer.innerHTML = resumes.map(r => `
+            <div style="border-bottom: 1px solid var(--border); padding: 0.5rem 0; display: flex; justify-content: space-between;">
+                <div>
+                    <strong>${escapeHtml(r.filename)}</strong>
+                    <div class="text-sm text-gray">Uploaded: ${new Date(r.uploaded_at).toLocaleString()}</div>
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        listContainer.innerHTML = `<p class="text-gray">${err.message}</p>`;
     }
 }
 
@@ -299,7 +428,7 @@ async function analyzeResume() {
         btn.disabled = true;
         btn.textContent = 'Analyzing...';
 
-        const response = await fetch(`${API_BASE}/resume/analyze-relevance?resume_id=${state.currentResumeId}`);
+        const response = await fetch(`${API_BASE}/resume/analyze-relevance?resume_id=${state.currentResumeId}`, { method: 'POST' });
         if (!response.ok) throw new Error('Analysis failed');
 
         const results = await response.json();

@@ -74,22 +74,17 @@ async def upload_resume(
             os.remove(file_path)
 
 
-@router.get("/{resume_id}", response_model=models.ResumeResponse)
-async def get_resume(resume_id: str):
-    """Get resume details"""
-    resume = await database.get_resume(resume_id)
-    
-    if not resume:
-        raise HTTPException(status_code=404, detail="Resume not found")
-    
-    return {
-        "resume_id": resume["resume_id"],
-        "filename": resume["filename"],
-        "extracted_skills": resume["extracted_skills"],
-        "extracted_experience": resume.get("content", "")[:500],  # First 500 chars
-        "uploaded_at": resume["uploaded_at"]
-    }
-
+@router.get("/all", response_model=List[models.ResumeResponse])
+async def get_all_resumes():
+    """Get all past uploaded resumes"""
+    resumes = await database.get_all_resumes()
+    return [{
+        "resume_id": r["resume_id"],
+        "filename": r["filename"],
+        "extracted_skills": r.get("extracted_skills", []),
+        "extracted_experience": r.get("content", "")[:500],
+        "uploaded_at": r["uploaded_at"]
+    } for r in resumes]
 
 @router.get("/latest")
 async def get_latest_resume():
@@ -107,6 +102,22 @@ async def get_latest_resume():
         "uploaded_at": resume["uploaded_at"]
     }
 
+
+@router.get("/{resume_id}", response_model=models.ResumeResponse)
+async def get_resume(resume_id: str):
+    """Get resume details"""
+    resume = await database.get_resume(resume_id)
+    
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    
+    return {
+        "resume_id": resume["resume_id"],
+        "filename": resume["filename"],
+        "extracted_skills": resume["extracted_skills"],
+        "extracted_experience": resume.get("content", "")[:500],  # First 500 chars
+        "uploaded_at": resume["uploaded_at"]
+    }
 
 @router.post("/analyze-relevance")
 async def analyze_resume_relevance(resume_id: str):

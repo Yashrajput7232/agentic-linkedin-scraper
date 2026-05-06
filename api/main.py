@@ -9,6 +9,10 @@ from fastapi.staticfiles import StaticFiles
 import os
 import sys
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env file (no-op if already set via Docker/environment)
+load_dotenv()
 
 # Add parent directory to path so we can import scripts
 sys.path.insert(0, str(Path(__file__).parent.parent))

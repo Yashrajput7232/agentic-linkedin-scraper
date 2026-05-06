@@ -53,6 +53,7 @@
                         </select>
                         <button id="apply-filters" class="btn btn-primary">Apply Filters</button>
                         <button id="clear-filters" class="btn btn-secondary">Clear</button>
+                        <button id="load-relevant-jobs" class="btn btn-success">⭐ Show Relevant Jobs</button>
                     </div>
                 </div>
 
@@ -95,6 +96,11 @@
                                 Analyze & Calculate Relevance Scores
                             </button>
                         </div>
+                    </div>
+
+                    <div id="past-resumes" class="resume-info" style="margin-top: 1.5rem;">
+                        <h3>Past Resumes</h3>
+                        <div id="past-resumes-list" style="margin-top: 1rem;"></div>
                     </div>
 
                     <div id="analysis-results" class="analysis-results hidden">
@@ -184,6 +190,18 @@
         <div class="modal-content">
             <span class="modal-close">&times;</span>
             <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Modal for Resume Selection -->
+    <div id="resume-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close" id="resume-modal-close">&times;</span>
+            <h2>Select a Resume</h2>
+            <p class="text-sm text-gray" style="margin-bottom: 1rem;">Choose which resume you want to use to find relevant jobs.</p>
+            <div id="resume-list" style="max-height: 400px; overflow-y: auto;">
+                <div class="loading">Loading resumes...</div>
+            </div>
         </div>
     </div>
 

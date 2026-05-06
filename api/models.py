@@ -18,11 +18,12 @@ class JobResponse(JobBase):
     job_id: str
     relevance_score: Optional[float] = None
     is_bookmarked: bool = False
-    
+
     class Config:
         from_attributes = True
 
 class JobWithDetails(JobResponse):
+    company_name: Optional[str] = None       # resolved from companies collection
     min_salary: Optional[float] = None
     max_salary: Optional[float] = None
     formatted_work_type: Optional[str] = None
@@ -30,6 +31,7 @@ class JobWithDetails(JobResponse):
     remote_allowed: Optional[bool] = None
     original_listed_time: Optional[str] = None
     skills_desc: Optional[str] = None
+    matching_skills: Optional[List[str]] = None  # populated when sorted by relevance
 
 # ─── Resume Models ──────────────────────────────────────────────────────────
 class ResumeUpload(BaseModel):

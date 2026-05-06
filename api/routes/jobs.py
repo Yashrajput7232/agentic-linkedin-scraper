@@ -71,14 +71,50 @@ async def list_jobs(
             sort_order=sort_order_int
         )
         
-        # Add bookmark status
+        # Add bookmark status in bulk
+        job_ids = [str(job.get("job_id")) for job in jobs if job.get("job_id")]
+        bookmarked_map = await database.are_bookmarked(job_ids)
         for job in jobs:
-            job["is_bookmarked"] = await database.is_bookmarked(job.get("job_id"))
+            job["is_bookmarked"] = bookmarked_map.get(str(job.get("job_id")), False)
         
         return jobs
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching jobs: {str(e)}")
+
+
+@router.get("/relevant", response_model=List[models.JobWithDetails])
+async def get_relevant_jobs(
+    resume_id: Optional[str] = Query(None, description="Specific resume ID to use for relevance"),
+    skip: int = Query(0),
+    limit: int = Query(50),
+):
+    """Return jobs sorted by resume relevance score (requires resume to be analyzed first)."""
+    if not resume_id:
+        # Get latest resume
+        resume = await database.get_latest_resume()
+        if not resume:
+            raise HTTPException(
+                status_code=400,
+                detail="No resume uploaded. Upload a resume and run 'Analyze' first."
+            )
+        resume_id = resume["resume_id"]
+
+    jobs = await database.get_relevant_jobs(resume_id, skip=skip, limit=limit)
+
+    if not jobs:
+        raise HTTPException(
+            status_code=404,
+            detail="No relevance scores found. Click 'Analyze & Calculate Relevance Scores' in the Resume tab first."
+        )
+
+    # Add bookmark status in bulk
+    job_ids = [str(job.get("job_id")) for job in jobs if job.get("job_id")]
+    bookmarked_map = await database.are_bookmarked(job_ids)
+    for job in jobs:
+        job["is_bookmarked"] = bookmarked_map.get(str(job.get("job_id")), False)
+
+    return jobs
 
 
 @router.get("/{job_id}", response_model=models.JobWithDetails)
@@ -133,7 +169,7 @@ async def get_bookmarks(skip: int = Query(0), limit: int = Query(50)):
                 "bookmark_id": str(bookmark.get("_id")),
                 "job_id": job.get("job_id"),
                 "job_title": job.get("title"),
-                "company": job.get("company_id"),
+                "company": job.get("company_name", job.get("company_id")),
                 "notes": bookmark.get("notes"),
                 "created_at": bookmark.get("created_at")
             })
@@ -213,3 +249,5 @@ async def calculate_relevance_for_jobs(
         "jobs_scored": len(scores),
         "top_matches": scores[:10]  # Return top 10
     }
+
+
