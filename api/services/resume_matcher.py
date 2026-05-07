@@ -140,21 +140,64 @@ class ResumeMatcher:
             return f"Low match. Only {matching} of {total_skills} required skills found."
     
     def calculate_bulk_scores(self, jobs: List[Dict]) -> List[Dict]:
-        """Calculate relevance scores for multiple jobs"""
+        """Calculate relevance scores for multiple jobs in bulk for performance"""
         results = []
         
+        # Pre-process all jobs text
+        job_texts = []
+        job_skills_list = []
         for job in jobs:
-            job_id = job.get("job_id")
             title = job.get("title", "")
             description = job.get("description", "")
+            job_text = f"{title} {description}".lower() if description else title.lower()
+            job_texts.append(self._preprocess_text(job_text))
+            job_skills_list.append(self.extract_skills(job_text))
             
-            score_data = self.calculate_relevance_score(title, description)
+        # Calculate TF-IDF for all simultaneously (Matrix operation)
+        tfidf_scores = [0] * len(jobs)
+        try:
+            if len(self.resume_text_processed.split()) >= 5:
+                vectorizer = TfidfVectorizer(
+                    analyzer='char',
+                    ngram_range=(2, 3),
+                    lowercase=True,
+                    stop_words='english'
+                )
+                corpus = [self.resume_text_processed] + job_texts
+                tfidf_matrix = vectorizer.fit_transform(corpus)
+                similarities = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:])
+                tfidf_scores = similarities[0] * 100
+        except Exception:
+            pass
+
+        # Compile final scores
+        for i, job in enumerate(jobs):
+            job_id = job.get("job_id")
+            job_skills = job_skills_list[i]
+            
+            matching_skills = list(set(self.resume_skills) & set(job_skills))
+            missing_skills = list(set(job_skills) - set(self.resume_skills))
+            
+            if job_skills:
+                skill_score = (len(matching_skills) / len(job_skills)) * 40
+            else:
+                skill_score = 20
+                
+            final_score = min(100, (float(tfidf_scores[i]) * 0.5) + skill_score)
+            
+            explanation = self._generate_explanation(
+                final_score,
+                len(matching_skills),
+                len(missing_skills),
+                len(job_skills)
+            )
+            
             results.append({
                 "job_id": job_id,
-                "score": score_data["score"],
-                "matching_skills": score_data["matching_skills"],
-                "missing_skills": score_data["missing_skills"],
-                "explanation": score_data["explanation"]
+                "score": round(final_score, 1),
+                "matching_skills": matching_skills,
+                "missing_skills": missing_skills,
+                "explanation": explanation
             })
         
         # Sort by score descending
