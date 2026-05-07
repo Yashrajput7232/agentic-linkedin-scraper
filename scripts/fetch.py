@@ -48,20 +48,33 @@ COOKIE_FILE = os.getenv("COOKIE_FILE", "linkedin_cookies.json")
 
 def _load_session_from_file(email: str) -> requests.Session | None:
     """
-    Try to build a session from linkedin_cookies.json.
+    Try to build a session from LINKEDIN_COOKIES_JSON env var or linkedin_cookies.json.
     Returns a Session if cookies are still valid, None otherwise.
     """
     import json
-    if not os.path.exists(COOKIE_FILE):
-        return None
-    if os.path.isdir(COOKIE_FILE):
-        print(f"[Session] COOKIE_FILE path is a directory, expected JSON file: {COOKIE_FILE}")
-        return None
-    try:
-        with open(COOKIE_FILE) as f:
-            all_cookies = json.load(f)
-    except Exception:
-        return None
+    
+    all_cookies = None
+    
+    # 1. Try from Environment Variable
+    env_cookies = os.getenv("LINKEDIN_COOKIES_JSON")
+    if env_cookies:
+        try:
+            all_cookies = json.loads(env_cookies)
+        except Exception as e:
+            print(f"[Session] Failed to parse LINKEDIN_COOKIES_JSON from .env: {e}")
+    
+    # 2. Try from File (Fallback)
+    if all_cookies is None:
+        if not os.path.exists(COOKIE_FILE):
+            return None
+        if os.path.isdir(COOKIE_FILE):
+            print(f"[Session] COOKIE_FILE path is a directory, expected JSON file: {COOKIE_FILE}")
+            return None
+        try:
+            with open(COOKIE_FILE) as f:
+                all_cookies = json.load(f)
+        except Exception:
+            return None
 
     if email not in all_cookies:
         print(f"[Session] No saved cookies found for {email} in {COOKIE_FILE}")
