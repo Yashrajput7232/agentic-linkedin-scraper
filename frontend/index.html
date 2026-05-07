@@ -199,9 +199,23 @@
                         </div>
                     </div>
 
-                    <div class="scraper-logs">
-                        <h3>Recent Logs</h3>
-                        <div id="logs-container" class="logs-list"></div>
+                    <div class="scraper-logs" style="margin-top: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <h3>Live Terminal Logs</h3>
+                            <button id="refresh-terminal" class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;">Refresh Terminal</button>
+                        </div>
+                        <div id="live-terminal-logs" style="
+                            background-color: #1e1e1e;
+                            color: #00ff00;
+                            font-family: monospace;
+                            padding: 1rem;
+                            border-radius: 6px;
+                            height: 400px;
+                            overflow-y: auto;
+                            white-space: pre-wrap;
+                            font-size: 0.85rem;
+                            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+                        ">Initializing...</div>
                     </div>
                 </div>
             </section>

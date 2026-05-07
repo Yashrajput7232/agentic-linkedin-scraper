@@ -73,35 +73,41 @@ async def run_scraper(fetch_details: bool = False):
     """
     Run the actual scraping in background
     """
-    global is_scraper_running
+    global is_scraper_running, scraper_process
     
     try:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        log_path = os.path.join(project_root, "scraper.log")
         
-        # Run search_retriever.py
-        search_process = await asyncio.create_subprocess_exec(
-            "python", "search_retriever.py",
-            cwd=project_root
-        )
-        
-        await asyncio.wait_for(search_process.wait(), timeout=3600)  # 1 hour timeout
-        
-        await database.log_scrape_event("search_retriever_completed", {
-            "returncode": search_process.returncode
-        })
-        
-        # Optionally run details_retriever.py
-        if fetch_details:
-            details_process = await asyncio.create_subprocess_exec(
-                "python", "details_retriever.py",
-                cwd=project_root
+        with open(log_path, "w") as log_file:
+            # Run search_retriever.py
+            scraper_process = await asyncio.create_subprocess_exec(
+                "python", "-u", "search_retriever.py",
+                cwd=project_root,
+                stdout=log_file,
+                stderr=subprocess.STDOUT
             )
             
-            await asyncio.wait_for(details_process.wait(), timeout=7200)  # 2 hours timeout
+            await asyncio.wait_for(scraper_process.wait(), timeout=3600)  # 1 hour timeout
             
-            await database.log_scrape_event("details_retriever_completed", {
-                "returncode": details_process.returncode
+            await database.log_scrape_event("search_retriever_completed", {
+                "returncode": scraper_process.returncode
             })
+            
+            # Optionally run details_retriever.py
+            if fetch_details:
+                scraper_process = await asyncio.create_subprocess_exec(
+                    "python", "-u", "details_retriever.py",
+                    cwd=project_root,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT
+                )
+                
+                await asyncio.wait_for(scraper_process.wait(), timeout=7200)  # 2 hours timeout
+                
+                await database.log_scrape_event("details_retriever_completed", {
+                    "returncode": scraper_process.returncode
+                })
         
         await database.log_scrape_event("scraper_completed", {
             "success": True,
@@ -151,7 +157,7 @@ async def get_scraper_logs(
     limit: int = Query(50),
     event_type: str = Query(None)
 ):
-    """Get recent scraper logs"""
+    """Get recent scraper logs from DB"""
     try:
         collection = database.database["scraper_logs"]
         filter_dict = {}
@@ -169,3 +175,21 @@ async def get_scraper_logs(
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching logs: {str(e)}")
+
+
+@router.get("/live-logs")
+async def get_live_logs():
+    """Get raw text logs from the currently running scraper"""
+    try:
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        log_path = os.path.join(project_root, "scraper.log")
+        
+        if not os.path.exists(log_path):
+            return {"logs": "No active logs found (scraper has not run yet)."}
+        
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            # Return last 200 lines to avoid massive payloads
+            return {"logs": "".join(lines[-200:])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading live logs: {str(e)}")

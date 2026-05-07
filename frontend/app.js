@@ -756,11 +756,27 @@ async function loadFilters() {
     }
 }
 
+async function loadLiveLogs() {
+    const terminal = document.getElementById('live-terminal-logs');
+    try {
+        const response = await fetch(`${API_BASE}/scraper/live-logs`);
+        if (!response.ok) throw new Error('Failed to fetch logs');
+        const data = await response.json();
+        terminal.textContent = data.logs || 'No logs available yet.';
+        terminal.scrollTop = terminal.scrollHeight;
+    } catch (error) {
+        if (terminal) terminal.textContent = `Error loading logs: ${error.message}`;
+    }
+}
+
+document.getElementById('refresh-terminal')?.addEventListener('click', loadLiveLogs);
+
 window.addEventListener('DOMContentLoaded', () => {
     loadFilters();
     loadJobs();
     loadResumeInfo();
     loadScraperStatus();
+    loadLiveLogs();
 });
 
 
