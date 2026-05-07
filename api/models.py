@@ -45,6 +45,10 @@ class ResumeResponse(BaseModel):
     extracted_experience: str
     uploaded_at: datetime
 
+class CustomJobEvaluationRequest(BaseModel):
+    resume_id: str
+    job_description: str
+
 # ─── Bookmark Models ────────────────────────────────────────────────────────
 class BookmarkCreate(BaseModel):
     job_id: str

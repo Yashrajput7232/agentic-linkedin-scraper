@@ -5,6 +5,7 @@ Scraper endpoints - Trigger and monitor job scraping
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from typing import List
 import subprocess
+import asyncio
 import os
 from api import models, database
 
@@ -75,15 +76,15 @@ async def run_scraper(fetch_details: bool = False):
     global is_scraper_running
     
     try:
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        
         # Run search_retriever.py
-        search_process = subprocess.Popen(
-            ["python", "search_retriever.py"],
-            cwd="/workspaces/agentic-linkedin-scraper",
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+        search_process = await asyncio.create_subprocess_exec(
+            "python", "search_retriever.py",
+            cwd=project_root
         )
         
-        search_process.wait(timeout=3600)  # 1 hour timeout
+        await asyncio.wait_for(search_process.wait(), timeout=3600)  # 1 hour timeout
         
         await database.log_scrape_event("search_retriever_completed", {
             "returncode": search_process.returncode
@@ -91,14 +92,12 @@ async def run_scraper(fetch_details: bool = False):
         
         # Optionally run details_retriever.py
         if fetch_details:
-            details_process = subprocess.Popen(
-                ["python", "details_retriever.py"],
-                cwd="/workspaces/agentic-linkedin-scraper",
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+            details_process = await asyncio.create_subprocess_exec(
+                "python", "details_retriever.py",
+                cwd=project_root
             )
             
-            details_process.wait(timeout=7200)  # 2 hours timeout
+            await asyncio.wait_for(details_process.wait(), timeout=7200)  # 2 hours timeout
             
             await database.log_scrape_event("details_retriever_completed", {
                 "returncode": details_process.returncode
@@ -108,6 +107,9 @@ async def run_scraper(fetch_details: bool = False):
             "success": True,
             "fetch_details": fetch_details
         })
+    
+    except asyncio.TimeoutError:
+        await database.log_scrape_event("scraper_timeout", {})
     
     except subprocess.TimeoutExpired:
         await database.log_scrape_event("scraper_timeout", {})

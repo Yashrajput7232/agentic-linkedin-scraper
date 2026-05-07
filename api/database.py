@@ -145,6 +145,10 @@ async def get_relevant_jobs(resume_id: str, skip: int = 0, limit: int = 50) -> L
         if job:
             job["relevance_score"] = s.get("score", 0)
             job["matching_skills"] = s.get("matching_skills", [])
+            job["missing_skills"] = s.get("missing_skills", [])
+            job["pros"] = s.get("pros", [])
+            job["cons"] = s.get("cons", [])
+            job["explanation"] = s.get("explanation", "")
             result.append(job)
     return result
 
@@ -155,6 +159,40 @@ async def get_jobs_count(filter_dict: Dict = None) -> int:
     
     collection = database["jobs"]
     return await collection.count_documents(filter_dict)
+
+async def get_job_filter_options() -> Dict[str, List[any]]:
+    """Get unique filter options directly from the database"""
+    collection = database["jobs"]
+    
+    locations = await collection.distinct("location", {"location": {"$nin": [None, ""]}})
+    work_types = await collection.distinct("formatted_work_type", {"formatted_work_type": {"$nin": [None, ""]}})
+    company_names = await collection.distinct("company_name", {"company_name": {"$nin": [None, ""]}})
+    company_ids = await collection.distinct("company_id", {"company_id": {"$nin": [None, ""]}})
+    
+    resolved_names = await get_company_names(company_ids)
+    
+    # Build a unique list of companies with {id, name}
+    companies_dict = {}
+    
+    for cname in company_names:
+        if cname:
+            companies_dict[cname] = cname  # use name as id if that's all we have
+            
+    for cid in company_ids:
+        if cid:
+            name = resolved_names.get(cid, cid)
+            # If we already have this name, we might want to ensure the id is the real id
+            companies_dict[cid] = name
+            
+    # Format companies for frontend
+    companies_list = [{"id": k, "name": v} for k, v in companies_dict.items()]
+    companies_list.sort(key=lambda x: x["name"].lower() if isinstance(x["name"], str) else "")
+    
+    return {
+        "locations": sorted([loc for loc in locations if isinstance(loc, str)]),
+        "work_types": sorted([wt for wt in work_types if isinstance(wt, str)]),
+        "companies": companies_list
+    }
 
 # ─── Resume Collection ───────────────────────────────────────────────────────
 async def save_resume(resume_id: str, filename: str, content: str, extracted_skills: List[str]):
@@ -263,13 +301,52 @@ async def log_scrape_event(event_type: str, details: Dict = None):
 async def get_scraper_stats() -> Dict:
     """Get scraper statistics"""
     jobs_collection = database["jobs"]
-    
-    total_jobs = await jobs_collection.count_documents({})
-    jobs_with_details = await jobs_collection.count_documents({"scraped": True})
-    pending_jobs = await jobs_collection.count_documents({"scraped": False})
-    
+
+    total_jobs       = await jobs_collection.count_documents({})
+    # scraped is stored as int (>0 = scraped), not bool
+    jobs_with_details = await jobs_collection.count_documents({"scraped": {"$gt": 0}})
+    pending_jobs      = await jobs_collection.count_documents({"scraped": 0})
+
     return {
         "jobs_scraped_total": total_jobs,
         "jobs_with_details": jobs_with_details,
         "pending_jobs": pending_jobs
     }
+
+async def get_scraped_jobs_for_analysis(limit: int = 5000) -> List[Dict]:
+    """
+    Fetch only fully-scraped jobs (scraped > 0) with their title and description.
+    Skips company-name enrichment — this is used only for resume matching.
+    Returns lightweight dicts: {job_id, title, description}
+    """
+    collection = database["jobs"]
+    cursor = collection.find(
+        {"scraped": {"$gt": 0}, "description": {"$exists": True, "$ne": ""}},
+        {"_id": 0, "job_id": 1, "title": 1, "description": 1}
+    ).limit(limit)
+    jobs = await cursor.to_list(length=limit)
+    # Ensure job_id is a string (stored as int in MongoDB)
+    for j in jobs:
+        if "job_id" in j and not isinstance(j["job_id"], str):
+            j["job_id"] = str(j["job_id"])
+    return jobs
+
+
+async def save_relevance_scores_bulk(resume_id: str, scores: List[Dict]):
+    """
+    Upsert relevance scores in a single bulk_write call instead of N round-trips.
+    """
+    from pymongo import UpdateOne
+    if not scores:
+        return
+    collection = database["relevance_scores"]
+    now = datetime.utcnow()
+    operations = [
+        UpdateOne(
+            {"resume_id": resume_id, "job_id": s["job_id"]},
+            {"$set": {**s, "resume_id": resume_id, "updated_at": now}},
+            upsert=True
+        )
+        for s in scores
+    ]
+    await collection.bulk_write(operations, ordered=False)

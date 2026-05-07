@@ -12,8 +12,9 @@ const state = {
     bookmarks: [],
     resumeInfo: null,
     filters: {
-        location: '',
-        workType: '',
+        location: [],
+        workType: [],
+        company: [],
         search: ''
     }
 };
@@ -63,13 +64,22 @@ async function loadJobs() {
         loading.style.display = 'block';
         container.innerHTML = '';
 
-        const params = new URLSearchParams({
-            skip: 0,
-            limit: 50,
-            ...(state.filters.location && { location: state.filters.location }),
-            ...(state.filters.workType && { work_type: state.filters.workType }),
-            ...(state.filters.search && { search: state.filters.search })
-        });
+        const params = new URLSearchParams();
+        params.append('skip', 0);
+        params.append('limit', 50);
+        
+        if (state.filters.location && state.filters.location.length) {
+            state.filters.location.forEach(l => params.append('location', l));
+        }
+        if (state.filters.workType && state.filters.workType.length) {
+            state.filters.workType.forEach(w => params.append('work_type', w));
+        }
+        if (state.filters.company && state.filters.company.length) {
+            state.filters.company.forEach(c => params.append('company', c));
+        }
+        if (state.filters.search) {
+            params.append('search', state.filters.search);
+        }
 
         const response = await fetch(`${API_BASE}/jobs?${params}`);
         if (!response.ok) throw new Error('Failed to load jobs');
@@ -113,7 +123,7 @@ function renderJobCard(job) {
         
         <div class="job-card-details">
             ${job.formatted_work_type ? `<div class="job-card-detail"><span class="job-card-detail-label">Type:</span><span class="job-card-detail-value">${escapeHtml(job.formatted_work_type)}</span></div>` : ''}
-            ${job.min_salary ? `<div class="job-card-detail"><span class="job-card-detail-label">Salary:</span><span class="job-card-detail-value">$${job.min_salary.toLocaleString()} - $${job.max_salary?.toLocaleString()}</span></div>` : ''}
+            ${job.min_salary ? `<div class="job-card-detail"><span class="job-card-detail-label">Salary:</span><span class="job-card-detail-value">₹${job.min_salary.toLocaleString('en-IN')} - ₹${job.max_salary?.toLocaleString('en-IN')}</span></div>` : ''}
             ${job.formatted_experience_level ? `<div class="job-card-detail"><span class="job-card-detail-label">Level:</span><span class="job-card-detail-value">${escapeHtml(job.formatted_experience_level)}</span></div>` : ''}
         </div>
 
@@ -132,10 +142,13 @@ function renderJobCard(job) {
 
 async function showJobDetails(jobId) {
     try {
-        const response = await fetch(`${API_BASE}/jobs/${jobId}`);
-        if (!response.ok) throw new Error('Failed to load job details');
+        let job = state.jobs.find(j => j.job_id === jobId);
         
-        const job = await response.json();
+        if (!job) {
+            const response = await fetch(`${API_BASE}/jobs/${jobId}`);
+            if (!response.ok) throw new Error('Failed to load job details');
+            job = await response.json();
+        }
         
         const modal = document.getElementById('job-modal');
         const modalBody = document.getElementById('modal-body');
@@ -145,13 +158,57 @@ async function showJobDetails(jobId) {
                 <h2>${escapeHtml(job.title)}</h2>
                 <p class="text-gray">${escapeHtml(job.company_name || job.company_id || 'Unknown Company')} • ${escapeHtml(job.location)}</p>
                 
-                ${job.relevance_score !== null ? `<div style="margin: 1rem 0"><span class="relevance-badge">${job.relevance_score.toFixed(0)}%</span></div>` : ''}
+                ${job.relevance_score !== null ? `
+                    <div style="margin-top: 1.5rem; padding: 1rem; border: 1px solid var(--border); border-radius: 8px; background: #f8fafc;">
+                        <h3 style="margin-bottom: 1rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem;">Evaluation Results</h3>
+                        
+                        <div style="display: flex; align-items: center; margin-bottom: 1rem;">
+                            <span class="relevance-badge ${job.relevance_score >= 70 ? 'high' : job.relevance_score >= 40 ? 'medium' : 'low'}">${job.relevance_score.toFixed(0)}%</span>
+                        </div>
+
+                        ${job.pros && job.pros.length > 0 ? `
+                            <div style="margin-top: 1rem;">
+                                <h4 style="color: #059669; margin-bottom: 0.5rem;">Why you are a good fit ✅</h4>
+                                <ul style="color: #059669; padding-left: 1.5rem; margin-bottom: 1rem;">
+                                    ${job.pros.map(p => `<li>${escapeHtml(p)}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+
+                        ${job.cons && job.cons.length > 0 ? `
+                            <div style="margin-top: 1rem;">
+                                <h4 style="color: #DC2626; margin-bottom: 0.5rem;">Areas for improvement / Missing ❌</h4>
+                                <ul style="color: #DC2626; padding-left: 1.5rem; margin-bottom: 1rem;">
+                                    ${job.cons.map(c => `<li>${escapeHtml(c)}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        
+                        ${job.matching_skills && job.matching_skills.length > 0 ? `
+                            <div style="margin-top: 1rem;">
+                                <h4 style="margin-bottom: 0.5rem;">Matching Skills Found</h4>
+                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                    ${job.matching_skills.map(s => `<span class="skill-tag">${escapeHtml(s)}</span>`).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        ${job.missing_skills && job.missing_skills.length > 0 ? `
+                            <div style="margin-top: 1rem;">
+                                <h4 style="margin-bottom: 0.5rem; color: #DC2626;">Missing Skills</h4>
+                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                    ${job.missing_skills.map(s => `<span class="skill-tag" style="background-color: #FEE2E2; color: #991B1B; border: 1px solid #FCA5A5;">${escapeHtml(s)}</span>`).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                ` : ''}
                 
-                <h3>Details</h3>
+                <h3 style="margin-top: 1.5rem">Details</h3>
                 <p><strong>Work Type:</strong> ${escapeHtml(job.formatted_work_type || 'N/A')}</p>
                 <p><strong>Experience Level:</strong> ${escapeHtml(job.formatted_experience_level || 'N/A')}</p>
                 <p><strong>Remote:</strong> ${job.remote_allowed ? 'Yes' : 'No'}</p>
-                ${job.min_salary ? `<p><strong>Salary:</strong> $${job.min_salary.toLocaleString()} - $${job.max_salary?.toLocaleString()}</p>` : ''}
+                ${job.min_salary ? `<p><strong>Salary:</strong> ₹${job.min_salary.toLocaleString('en-IN')} - ₹${job.max_salary?.toLocaleString('en-IN')}</p>` : ''}
                 
                 <h3 style="margin-top: 1.5rem">Description</h3>
                 <p>${escapeHtml(job.description || 'No description available').substring(0, 1000)}...</p>
@@ -196,11 +253,17 @@ async function isJobBookmarked(jobId) {
     return job?.is_bookmarked || false;
 }
 
+function getSelectedValues(selectId) {
+    const select = document.getElementById(selectId);
+    return Array.from(select.selectedOptions).map(opt => opt.value).filter(v => v !== '');
+}
+
 // Filter buttons
 document.getElementById('apply-filters').addEventListener('click', () => {
     state.filters.search = document.getElementById('search-input').value;
-    state.filters.location = document.getElementById('location-filter').value;
-    state.filters.workType = document.getElementById('work-type-filter').value;
+    state.filters.location = getSelectedValues('location-filter');
+    state.filters.workType = getSelectedValues('work-type-filter');
+    state.filters.company = getSelectedValues('company-filter');
     loadJobs();
 });
 
@@ -208,7 +271,8 @@ document.getElementById('clear-filters').addEventListener('click', () => {
     document.getElementById('search-input').value = '';
     document.getElementById('location-filter').value = '';
     document.getElementById('work-type-filter').value = '';
-    state.filters = { location: '', workType: '', search: '' };
+    document.getElementById('company-filter').value = '';
+    state.filters = { location: [], workType: [], company: [], search: '' };
     loadJobs();
 });
 
@@ -408,10 +472,41 @@ async function loadAllResumes() {
                     <strong>${escapeHtml(r.filename)}</strong>
                     <div class="text-sm text-gray">Uploaded: ${new Date(r.uploaded_at).toLocaleString()}</div>
                 </div>
+                <button class="btn btn-secondary" onclick="selectPastResume('${r.resume_id}')" style="padding: 0.25rem 0.75rem; font-size: 0.875rem;">Select</button>
             </div>
         `).join('');
     } catch (err) {
         listContainer.innerHTML = `<p class="text-gray">${err.message}</p>`;
+    }
+}
+
+async function selectPastResume(resumeId) {
+    try {
+        const response = await fetch(`${API_BASE}/resume/${resumeId}`);
+        if (!response.ok) throw new Error('Failed to load resume');
+        
+        const resume = await response.json();
+        state.currentResumeId = resume.resume_id;
+        state.resumeInfo = resume;
+
+        document.getElementById('resume-filename').textContent = resume.filename;
+        document.getElementById('resume-date').textContent = new Date(resume.uploaded_at).toLocaleDateString();
+
+        const skillsList = document.getElementById('skills-list');
+        if (resume.extracted_skills && resume.extracted_skills.length > 0) {
+            skillsList.innerHTML = resume.extracted_skills
+                .map(skill => `<span class="skill-tag">${escapeHtml(skill)}</span>`)
+                .join('');
+        } else {
+            skillsList.innerHTML = '<span class="text-gray">No specific skills extracted</span>';
+        }
+
+        document.getElementById('resume-info').classList.remove('hidden');
+        
+        // Scroll to top or show an indication
+        document.getElementById('resume-info').scrollIntoView({ behavior: 'smooth' });
+    } catch (err) {
+        alert('Error selecting resume: ' + err.message);
     }
 }
 
@@ -447,6 +542,72 @@ async function analyzeResume() {
         const btn = document.getElementById('analyze-resume');
         btn.disabled = false;
         btn.textContent = 'Analyze & Calculate Relevance Scores';
+    }
+}
+
+// ─── Custom Job Evaluation ──────────────────────────────────────────────────
+document.getElementById('btn-eval-custom').addEventListener('click', evaluateCustomJob);
+
+async function evaluateCustomJob() {
+    if (!state.currentResumeId) {
+        alert('Please upload or select a resume first.');
+        return;
+    }
+
+    const jdText = document.getElementById('custom-jd-input').value.trim();
+    if (!jdText) {
+        alert('Please paste a job description.');
+        return;
+    }
+
+    try {
+        const btn = document.getElementById('btn-eval-custom');
+        btn.disabled = true;
+        btn.textContent = 'Evaluating...';
+
+        const response = await fetch(`${API_BASE}/resume/evaluate-custom-job`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                resume_id: state.currentResumeId,
+                job_description: jdText
+            })
+        });
+
+        if (!response.ok) throw new Error('Evaluation failed');
+
+        const results = await response.json();
+
+        document.getElementById('custom-eval-score').textContent = `${results.score.toFixed(0)}%`;
+        
+        // Pros
+        const prosList = document.getElementById('custom-eval-pros');
+        prosList.innerHTML = results.pros && results.pros.length > 0 
+            ? results.pros.map(p => `<li>${escapeHtml(p)}</li>`).join('')
+            : '<li>No specific pros found.</li>';
+            
+        // Cons
+        const consList = document.getElementById('custom-eval-cons');
+        consList.innerHTML = results.cons && results.cons.length > 0
+            ? results.cons.map(c => `<li>${escapeHtml(c)}</li>`).join('')
+            : '<li>No missing requirements found!</li>';
+            
+        // Matching Skills
+        const skillsContainer = document.getElementById('custom-eval-matching-skills');
+        skillsContainer.innerHTML = results.matching_skills && results.matching_skills.length > 0
+            ? results.matching_skills.map(s => `<span class="skill-tag">${escapeHtml(s)}</span>`).join('')
+            : '<span class="text-gray">No matching skills</span>';
+
+        document.getElementById('custom-eval-results').classList.remove('hidden');
+
+    } catch (error) {
+        alert(`Error evaluating job: ${error.message}`);
+    } finally {
+        const btn = document.getElementById('btn-eval-custom');
+        btn.disabled = false;
+        btn.textContent = 'Evaluate Custom JD';
     }
 }
 
@@ -576,11 +737,30 @@ function escapeHtml(text) {
 }
 
 // ─── Initialize ─────────────────────────────────────────────────────────────
+async function loadFilters() {
+    try {
+        const response = await fetch(`${API_BASE}/jobs/filters`);
+        if (!response.ok) return;
+        const filters = await response.json();
+        
+        const locSelect = document.getElementById('location-filter');
+        locSelect.innerHTML = '<option value="">All Locations</option>' + filters.locations.map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('');
+        
+        const typeSelect = document.getElementById('work-type-filter');
+        typeSelect.innerHTML = '<option value="">All Work Types</option>' + filters.work_types.map(w => `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`).join('');
+        
+        const compSelect = document.getElementById('company-filter');
+        compSelect.innerHTML = '<option value="">All Companies</option>' + filters.companies.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
+    } catch (error) {
+        console.error('Error loading filters', error);
+    }
+}
+
 window.addEventListener('DOMContentLoaded', () => {
+    loadFilters();
     loadJobs();
     loadResumeInfo();
     loadScraperStatus();
 });
 
-// Auto-refresh scraper status
-setInterval(loadScraperStatus, 5000);
+

@@ -49,6 +49,60 @@ class ResumeMatcher:
         self.resume_content = resume_content.lower()
         self.resume_skills = self.extract_skills(resume_content)
         self.resume_text_processed = self._preprocess_text(resume_content)
+        self.resume_experience_years = self.extract_experience_years(resume_content, is_resume=True)
+
+    def extract_experience_years(self, text: str, is_resume: bool = False) -> float:
+        """Extract years of experience from text"""
+        text = text.lower()
+        if is_resume:
+            # Exclude internship experience
+            lines = re.split(r'[\n\.]', text)
+            filtered_text = " ".join([line for line in lines if 'intern' not in line])
+            
+            # 1. Try explicit "X years"
+            matches = re.findall(r'(\d+(?:\.\d+)?)\s*(?:\+|to|-|–)?\s*(?:\d+)?\s*years?(?:\s+of)?\s+experience', filtered_text)
+            explicit_years = max([float(m) for m in matches if 0 < float(m) < 40], default=0.0)
+            
+            # 2. Try date ranges
+            import datetime
+            current_year = datetime.datetime.now().year
+            total_years_dates = 0.0
+            date_matches = re.findall(r'\b(19\d{2}|20\d{2})\s*(?:-|to|–|—)\s*(20\d{2}|present|current|now)\b', filtered_text)
+            intervals = []
+            for start_str, end_str in date_matches:
+                start_yr = int(start_str)
+                end_yr = current_year if end_str in ['present', 'current', 'now'] else int(end_str)
+                if start_yr <= end_yr <= current_year:
+                    intervals.append((start_yr, end_yr))
+            
+            if intervals:
+                intervals.sort()
+                consolidated = [intervals[0]]
+                for curr in intervals[1:]:
+                    prev = consolidated[-1]
+                    if curr[0] <= prev[1]:
+                        consolidated[-1] = (prev[0], max(prev[1], curr[1]))
+                    else:
+                        consolidated.append(curr)
+                for interval in consolidated:
+                    total_years_dates += max(0.5, interval[1] - interval[0])
+            
+            return max(explicit_years, total_years_dates)
+        else:
+            # For job descriptions, we want minimum required years
+            matches = re.findall(r'(\d+(?:\.\d+)?)\s*(?:\+|to|-|–)?\s*(?:\d+)?\s*years?(?:\s+of)?\s+experience', text)
+            if matches:
+                nums = [float(m) for m in matches if 0 < float(m) < 20]
+                if nums:
+                    return min(nums)
+            
+            # fallback: look for just "years"
+            matches2 = re.findall(r'(\d+(?:\.\d+)?)\s*(?:\+|to|-|–)?\s*(?:\d+)?\s*years?', text)
+            if matches2:
+                nums = [float(m) for m in matches2 if 0 < float(m) < 20]
+                if nums:
+                    return min(nums)
+            return 0.0
     
     def extract_skills(self, text: str) -> List[str]:
         """Extract technical skills from text"""
@@ -112,20 +166,52 @@ class ResumeMatcher:
         # Combined score
         final_score = min(100, (tfidf_score * 0.5) + skill_score)
         
-        # Generate explanation
+        # Experience Check
+        job_exp = self.extract_experience_years(job_text, is_resume=False)
+        exp_penalty = 0
+        if job_exp > 0 and self.resume_experience_years < job_exp:
+            gap = job_exp - self.resume_experience_years
+            exp_penalty = min(20, (gap / job_exp) * 20)
+            final_score = max(0, final_score - exp_penalty)
+            
+        # Detailed feedback
+        pros = []
+        cons = []
+        
+        if matching_skills:
+            pros.append(f"You have {len(matching_skills)} of the required skills ({', '.join(matching_skills[:5])}{'...' if len(matching_skills)>5 else ''}).")
+        
+        if missing_skills:
+            cons.append(f"You are missing {len(missing_skills)} recommended skills ({', '.join(missing_skills[:5])}{'...' if len(missing_skills)>5 else ''}).")
+        
+        if job_exp > 0:
+            if self.resume_experience_years >= job_exp:
+                pros.append(f"You meet the experience requirement (Requires {job_exp} years, you have ~{self.resume_experience_years} years).")
+            else:
+                cons.append(f"You may fall short on experience (Requires {job_exp} years, you have ~{self.resume_experience_years} years).")
+        else:
+            pros.append(f"Your experience (~{self.resume_experience_years} years) looks sufficient as no strict minimum was found.")
+
+        # Generate simple explanation
         explanation = self._generate_explanation(
-            final_score,
+            final_score + exp_penalty,
             len(matching_skills),
             len(missing_skills),
             len(job_skills)
         )
+        if exp_penalty > 0:
+            explanation += f" Note: Job asks for {job_exp} years experience, but resume shows ~{self.resume_experience_years} years."
         
         return {
             "score": round(final_score, 1),
             "matching_skills": matching_skills,
             "missing_skills": missing_skills,
             "explanation": explanation,
-            "skill_match_percentage": round((len(matching_skills) / max(len(job_skills), 1)) * 100, 1)
+            "skill_match_percentage": round((len(matching_skills) / max(len(job_skills), 1)) * 100, 1),
+            "pros": pros,
+            "cons": cons,
+            "job_experience_required": job_exp,
+            "candidate_experience": self.resume_experience_years
         }
     
     def _generate_explanation(self, score: float, matching: int, missing: int, total_skills: int) -> str:
@@ -152,6 +238,9 @@ class ResumeMatcher:
             job_text = f"{title} {description}".lower() if description else title.lower()
             job_texts.append(self._preprocess_text(job_text))
             job_skills_list.append(self.extract_skills(job_text))
+            
+        # Pre-extract job experience requirements
+        job_exp_list = [self.extract_experience_years(t, is_resume=False) for t in job_texts]
             
         # Calculate TF-IDF for all simultaneously (Matrix operation)
         tfidf_scores = [0] * len(jobs)
@@ -185,19 +274,50 @@ class ResumeMatcher:
                 
             final_score = min(100, (float(tfidf_scores[i]) * 0.5) + skill_score)
             
+            # Apply experience penalty if job asks for more experience than resume has
+            job_exp = job_exp_list[i]
+            exp_penalty = 0
+            if job_exp > 0 and self.resume_experience_years < job_exp:
+                gap = job_exp - self.resume_experience_years
+                # penalize up to 20 points
+                exp_penalty = min(20, (gap / job_exp) * 20)
+                final_score = max(0, final_score - exp_penalty)
+            
             explanation = self._generate_explanation(
-                final_score,
+                final_score + exp_penalty, # base explanation on unpenalized score
                 len(matching_skills),
                 len(missing_skills),
                 len(job_skills)
             )
             
+            if exp_penalty > 0:
+                explanation += f" Note: Job asks for {job_exp} years experience, but resume shows ~{self.resume_experience_years} years (internships excluded)."
+            
+            # Detailed feedback
+            pros = []
+            cons = []
+            if matching_skills:
+                pros.append(f"You have {len(matching_skills)} required skills ({', '.join(matching_skills[:5])}{'...' if len(matching_skills)>5 else ''}).")
+            if missing_skills:
+                cons.append(f"You are missing {len(missing_skills)} recommended skills ({', '.join(missing_skills[:5])}{'...' if len(missing_skills)>5 else ''}).")
+            if job_exp > 0:
+                if self.resume_experience_years >= job_exp:
+                    pros.append(f"You meet the experience requirement (Requires {job_exp} years, you have ~{self.resume_experience_years} years).")
+                else:
+                    cons.append(f"You may fall short on experience (Requires {job_exp} years, you have ~{self.resume_experience_years} years).")
+            else:
+                pros.append(f"Your experience (~{self.resume_experience_years} years) looks sufficient as no strict minimum was found.")
+
             results.append({
                 "job_id": job_id,
                 "score": round(final_score, 1),
                 "matching_skills": matching_skills,
                 "missing_skills": missing_skills,
-                "explanation": explanation
+                "explanation": explanation,
+                "pros": pros,
+                "cons": cons,
+                "job_experience_required": job_exp,
+                "candidate_experience": self.resume_experience_years
             })
         
         # Sort by score descending

@@ -2,6 +2,7 @@
 Jobs endpoints - List, filter, and manage jobs
 """
 
+import re
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
 from api import models, database
@@ -11,8 +12,9 @@ router = APIRouter()
 
 @router.get("/", response_model=List[models.JobWithDetails])
 async def list_jobs(
-    location: Optional[str] = Query(None),
-    work_type: Optional[str] = Query(None),
+    location: Optional[List[str]] = Query(None),
+    work_type: Optional[List[str]] = Query(None),
+    company: Optional[List[str]] = Query(None),
     experience_level: Optional[str] = Query(None),
     min_salary: Optional[float] = Query(None),
     max_salary: Optional[float] = Query(None),
@@ -29,10 +31,18 @@ async def list_jobs(
     filter_dict = {}
     
     if location:
-        filter_dict["location"] = {"$regex": location, "$options": "i"}
+        filter_dict["location"] = {"$in": [re.compile(loc, re.IGNORECASE) for loc in location]}
     
     if work_type:
-        filter_dict["formatted_work_type"] = work_type
+        filter_dict["formatted_work_type"] = {"$in": work_type}
+        
+    if company:
+        # Match any of the selected companies by name or id
+        company_regexes = [re.compile(c, re.IGNORECASE) for c in company]
+        filter_dict["$or"] = [
+            {"company_name": {"$in": company_regexes}},
+            {"company_id": {"$in": company_regexes}}
+        ]
     
     if experience_level:
         filter_dict["formatted_experience_level"] = experience_level
@@ -81,6 +91,16 @@ async def list_jobs(
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching jobs: {str(e)}")
+
+
+@router.get("/filters")
+async def get_filters():
+    """Get unique filter options (locations, work types, companies)"""
+    try:
+        filters = await database.get_job_filter_options()
+        return filters
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching filters: {str(e)}")
 
 
 @router.get("/relevant", response_model=List[models.JobWithDetails])

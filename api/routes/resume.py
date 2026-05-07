@@ -2,8 +2,8 @@
 Resume endpoints - Upload and manage resumes
 """
 
-from fastapi import APIRouter, HTTPException, File, UploadFile, Form
-from typing import List
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Body
+from typing import List, Dict
 import os
 import uuid
 from api import models, database
@@ -122,31 +122,48 @@ async def get_resume(resume_id: str):
 @router.post("/analyze-relevance")
 async def analyze_resume_relevance(resume_id: str):
     """
-    Analyze resume and calculate relevance scores for all jobs
+    Analyze resume and calculate relevance scores for all scraped jobs.
+    Only jobs with a description (scraped > 0) are scored.
     """
+    import traceback
     resume = await database.get_resume(resume_id)
-    
+
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
-    
+
+    resume_text = resume.get("content", "")
+    if not resume_text.strip():
+        raise HTTPException(status_code=400, detail="Resume content is empty")
+
     try:
-        resume_text = resume.get("content")
         matcher = ResumeMatcher(resume_text)
-        
-        # Get all jobs from database
-        jobs = await database.get_jobs(limit=10000)
-        
-        # Calculate scores for all jobs
+
+        # Only fetch fully-scraped jobs that have a description
+        # Skip company-name enrichment (not needed for scoring) — much faster
+        jobs = await database.get_scraped_jobs_for_analysis(limit=5000)
+
+        if not jobs:
+            return {
+                "resume_id": resume_id,
+                "total_jobs_analyzed": 0,
+                "average_relevance_score": 0,
+                "high_matches": 0,
+                "top_matches": [],
+                "extracted_skills": resume.get("extracted_skills", []),
+                "message": "No scraped jobs found. Run details_retriever.py first."
+            }
+
+        # Score all jobs (bulk TF-IDF — single matrix operation)
         scores = matcher.calculate_bulk_scores(jobs)
-        
-        # Save scores
-        await database.save_relevance_scores(resume_id, scores)
-        
-        # Return statistics
+
+        # Persist scores using bulk_write (fast — single round-trip)
+        await database.save_relevance_scores_bulk(resume_id, scores)
+
+        # Stats
         top_scores = scores[:10]
-        avg_score = sum(s["score"] for s in scores) / len(scores) if scores else 0
+        avg_score  = sum(s["score"] for s in scores) / len(scores) if scores else 0
         high_matches = sum(1 for s in scores if s["score"] >= 70)
-        
+
         return {
             "resume_id": resume_id,
             "total_jobs_analyzed": len(scores),
@@ -155,8 +172,10 @@ async def analyze_resume_relevance(resume_id: str):
             "top_matches": top_scores,
             "extracted_skills": resume.get("extracted_skills", [])
         }
-    
+
     except Exception as e:
+        tb = traceback.format_exc()
+        print(f"[analyze-relevance] ERROR:\n{tb}")
         raise HTTPException(status_code=500, detail=f"Error analyzing resume: {str(e)}")
 
 
@@ -173,3 +192,24 @@ async def get_resume_text(resume_id: str):
         "content": resume.get("content", ""),
         "filename": resume["filename"]
     }
+
+@router.post("/evaluate-custom-job")
+async def evaluate_custom_job(request: models.CustomJobEvaluationRequest):
+    """Evaluate a custom pasted job description against the uploaded resume."""
+    resume = await database.get_resume(request.resume_id)
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    resume_text = resume.get("content", "")
+    if not resume_text.strip():
+        raise HTTPException(status_code=400, detail="Resume content is empty")
+        
+    try:
+        matcher = ResumeMatcher(resume_text)
+        result = matcher.calculate_relevance_score("Custom Job", request.job_description)
+        return result
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[evaluate-custom] ERROR:\n{tb}")
+        raise HTTPException(status_code=500, detail=f"Error evaluating job: {str(e)}")

@@ -38,18 +38,14 @@
                             class="search-box" 
                             placeholder="Search by title or description..."
                         >
+                        <select id="company-filter" class="filter-select">
+                            <option value="">All Companies</option>
+                        </select>
                         <select id="location-filter" class="filter-select">
                             <option value="">All Locations</option>
-                            <option value="Remote">Remote</option>
-                            <option value="New York">New York</option>
-                            <option value="San Francisco">San Francisco</option>
-                            <option value="London">London</option>
                         </select>
                         <select id="work-type-filter" class="filter-select">
                             <option value="">All Work Types</option>
-                            <option value="Full-time">Full-time</option>
-                            <option value="Part-time">Part-time</option>
-                            <option value="Contract">Contract</option>
                         </select>
                         <button id="apply-filters" class="btn btn-primary">Apply Filters</button>
                         <button id="clear-filters" class="btn btn-secondary">Clear</button>
@@ -120,6 +116,39 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Custom Job Evaluation Section -->
+                    <div class="custom-eval-section" style="margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+                        <h3>Evaluate Custom Job Description</h3>
+                        <p class="text-sm text-gray" style="margin-bottom: 1rem;">Paste a job description here to see how well your currently selected resume matches it.</p>
+                        
+                        <textarea id="custom-jd-input" rows="8" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 1rem; resize: vertical;" placeholder="Paste job description here..."></textarea>
+                        
+                        <button id="btn-eval-custom" class="btn btn-primary" style="margin-bottom: 1.5rem;">Evaluate Custom JD</button>
+
+                        <div id="custom-eval-results" class="hidden" style="background: var(--surface); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h4>Evaluation Results</h4>
+                                <div id="custom-eval-score" class="relevance-badge" style="font-size: 1.25rem;">0%</div>
+                            </div>
+                            
+                            <div style="margin-bottom: 1.5rem;">
+                                <h5>Why you are a good fit ✅</h5>
+                                <ul id="custom-eval-pros" style="color: #059669; padding-left: 1.5rem; margin-top: 0.5rem;"></ul>
+                            </div>
+
+                            <div style="margin-bottom: 1.5rem;">
+                                <h5>Areas for improvement / Missing ❌</h5>
+                                <ul id="custom-eval-cons" style="color: #DC2626; padding-left: 1.5rem; margin-top: 0.5rem;"></ul>
+                            </div>
+                            
+                            <div class="skills-section">
+                                <h5>Matching Skills Found</h5>
+                                <div id="custom-eval-matching-skills" class="skills-tags" style="margin-top: 0.5rem;"></div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </section>
 
@@ -205,6 +234,6 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=2"></script>
 </body>
 </html>
