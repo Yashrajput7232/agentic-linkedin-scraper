@@ -52,7 +52,7 @@ services:
       - COOKIE_FILE=/app/linkedin_cookies.json
       - MONGODB_URL=mongodb://${MONGO_USER:-scraper}:${MONGO_PASSWORD:-password}@mongodb:27017
       - MONGODB_DB_NAME=${MONGODB_DB_NAME:-linkedin_jobs}
-    volumes:
+    # volumes:
       # Mount the cookie file if using file-based cookies instead of LINKEDIN_COOKIES_JSON
       # - ./linkedin_cookies.json:/app/linkedin_cookies.json:ro
     depends_on:
