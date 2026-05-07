@@ -62,21 +62,13 @@ COPY . .
 # ── Expose API port ──────────────────────────────────────────────────────────
 EXPOSE 8000
 
-# ── Default command can be overridden in docker-compose ─────────────────────
-CMD ["python", "search_retriever.py"]
 
-# ── App setup ────────────────────────────────────────────────────────────────
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
-
-# ── Environment defaults (override via docker run -e or .env mount) ───────────
+# ── Environment defaults ───────────────────────────────────────────────────────
 ENV HEADLESS=true
 ENV PYTHONUNBUFFERED=1
 
 # ── Entrypoint ───────────────────────────────────────────────────────────────
-# Default: run the search scraper.
-# Override CMD to run details_retriever or match_jobs instead.
-CMD ["python", "search_retriever.py"]
+# Start the FastAPI Dashboard. 
+# Render.com will bind to the PORT env variable automatically.
+CMD sh -c "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"
